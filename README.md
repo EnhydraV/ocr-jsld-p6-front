@@ -123,6 +123,34 @@ npm test
 
 Les tests utilisent `createMemoryRouter` avec `hydrationData` pour injecter les donnees directement sans passer par le loader, ce qui evite les dependances aux Web APIs dans jsdom.
 
+## Docker
+
+L'application peut être buildée et servie via Docker, en multi-stage : un stage `builder` (Node) qui compile l'application, puis un stage `runner` (Nginx) qui sert uniquement le résultat statique (`dist/`).
+
+### Build et run
+
+```bash
+docker compose up -d --build
+```
+
+L'application est alors accessible sur [http://localhost:8080](http://localhost:8080).
+
+Sans `docker-compose`, en commandes brutes :
+
+```bash
+docker build -t olympic-tracker .
+docker run -p 8080:8080 olympic-tracker
+```
+
+### Details du build
+
+| Stage | Image de base | Role |
+|---|---|---|
+| `builder` | `node:24.18.0-alpine` | `npm install` puis `npm run build` (`tsc` + Vite), produit `/app/dist` |
+| `runner` | `nginxinc/nginx-unprivileged:alpine3.23` | Sert `dist/` en statique sur le port 8080, en utilisateur non-root |
+
+La configuration Nginx (`nginx.conf`) gere le fallback SPA (`try_files $uri /index.html`) pour le routing cote client de React Router, ainsi que le cache long des assets statiques et la compression gzip.
+
 ## License
 
 MIT
