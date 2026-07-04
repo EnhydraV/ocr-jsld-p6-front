@@ -139,7 +139,7 @@ Sans `docker-compose`, en commandes brutes :
 
 ```bash
 docker build -t olympic-tracker .
-docker run -p 8080:8080 olympic-tracker
+docker run -p 80:8080 olympic-tracker
 ```
 
 ### Details du build
