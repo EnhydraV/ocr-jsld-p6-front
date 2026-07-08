@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# en cas d'erreur d'une commande, le script s'arrêt et retourne le code d'erreur de la commande
+# en cas d'erreur d'une commande, le script s'arrête et retourne le code d'erreur de la commande
 set -euo pipefail
 
 TESTS_RESULTS_DIR=./test-results
