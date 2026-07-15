@@ -107,7 +107,10 @@ jobs:
 
       - name: Tag image with the semantic release version
         if: needs.release.outputs.new_release_published == 'true'
+        # github.repository garde la casse du compte (EnhydraV/...) or Docker exige
+        # des noms en minuscules ; ${VAR,,} fait la conversion, faute de lower()
+        # dans les expressions GitHub Actions.
         run: |
           docker buildx imagetools create \
-            --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.release.outputs.new_release_version }} \
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.push.outputs.digest }}
+            --tag "${REGISTRY}/${IMAGE_NAME,,}:${{ needs.release.outputs.new_release_version }}" \
+            "${REGISTRY}/${IMAGE_NAME,,}@${{ steps.push.outputs.digest }}"
