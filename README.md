@@ -33,6 +33,7 @@ npm install
 | `npm test` | Lancer les tests |
 | `npm run test:watch` | Tests en mode watch |
 | `npm run test:coverage` | Tests avec rapport de couverture |
+| `npm run test:ci` | Tests en mode CI avec rapport JUnit (utilisé par `run-tests.sh`) |
 
 ## Structure du projet
 
@@ -58,6 +59,7 @@ p6-dfsjs-frontend/
 │   ├── setup.ts                    # Setup Jest (jest-dom)
 │   └── components/
 │       └── Home.test.tsx           # Tests du composant Home
+├── run-tests.sh                    # Script de tests pour la CI (npm ci + rapport JUnit)
 ├── index.html                      # Template HTML SPA
 ├── .husky/
 │   └── commit-msg                  # Hook git commitlint
@@ -128,6 +130,25 @@ npm test
 
 Les tests utilisent `createMemoryRouter` avec `hydrationData` pour injecter les donnees directement sans passer par le loader, ce qui evite les dependances aux Web APIs dans jsdom.
 
+### Script CI : `run-tests.sh`
+
+C'est le point d'entrée des tests dans le workflow GitHub Actions (job `test`), mais il se lance aussi en local à l'identique :
+
+```bash
+./run-tests.sh
+```
+
+Ce qu'il fait, dans l'ordre :
+
+1. **`set -euo pipefail`** — le script s'arrête à la première commande en erreur et propage son code de sortie, ce qui fait échouer le job CI proprement (variable non définie ou erreur au milieu d'un pipe comprises).
+2. **Nettoie puis recrée `test-results/`** — les rapports d'un run précédent ne peuvent pas polluer le résultat courant.
+3. **`npm ci`** — installation propre et reproductible des dépendances, strictement depuis `package-lock.json` (contrairement à `npm install`, qui peut modifier le lockfile).
+4. **`npm run test:ci`** — lance Jest en mode CI (`--ci`, pas d'écriture de snapshots) avec deux reporters : `default` (sortie console lisible) et `jest-junit` (rapport XML exploitable par les outils).
+
+La variable d'environnement `JEST_JUNIT_OUTPUT_DIR` est exportée vers `test-results/`, donc le rapport atterrit dans `test-results/junit.xml`. C'est ce fichier que le workflow uploade en artefact (`junit-report`), y compris quand les tests échouent (`if: always()`).
+
+**À noter :** `.gitattributes` force les fins de ligne LF sur les `*.sh`. Sans ça, un checkout depuis Windows (CRLF) casse le script avec le classique `env: 'bash\r': No such file or directory`.
+
 ## Docker
 
 L'application peut être buildée et servie via Docker, en multi-stage : un stage `builder` (Node) qui compile l'application, puis un stage `runner` (Nginx) qui sert uniquement le résultat statique (`dist/`).
@@ -160,7 +181,7 @@ La configuration Nginx (`nginx.conf`) gere le fallback SPA (`try_files $uri /ind
 
 Le workflow GitHub Actions (`.github/workflows/ci.yml`) enchaîne trois jobs sur chaque push :
 
-1. **`test`** — installe les dépendances et lance la suite Jest (`./run-tests.sh`), sur toutes les branches.
+1. **`test`** — installe les dépendances et lance la suite Jest via `./run-tests.sh` (détaillé dans la section [Tests](#script-ci--run-testssh)), sur toutes les branches.
 2. **`release`** *(uniquement sur `main`)* — lance [semantic-release](https://semantic-release.gitbook.io/) pour déterminer la prochaine version à partir de l'historique des commits, générer un changelog et publier une release GitHub.
 3. **`build-and-push-image`** — build l'image Docker et la pousse sur `ghcr.io`. Si `release` a publié une nouvelle version, l'image est aussi taguée avec ce numéro de version (ex : `ghcr.io/<owner>/<repo>:1.4.0`), en plus de son tag de branche.
 
