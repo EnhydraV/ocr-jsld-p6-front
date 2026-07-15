@@ -59,6 +59,8 @@ p6-dfsjs-frontend/
 │   └── components/
 │       └── Home.test.tsx           # Tests du composant Home
 ├── index.html                      # Template HTML SPA
+├── .husky/
+│   └── commit-msg                  # Hook git commitlint
 ├── package.json
 ├── tsconfig.json                   # Configuration TypeScript stricte
 ├── vite.config.ts                  # Configuration Vite
@@ -66,6 +68,9 @@ p6-dfsjs-frontend/
 ├── babel.config.json               # Presets Babel pour Jest (env, react, typescript)
 ├── tailwind.config.js              # Configuration Tailwind CSS
 ├── postcss.config.js               # Configuration PostCSS
+├── .releaserc.json                 # Configuration semantic-release
+├── commitlint.config.js            # Regles de lint Conventional Commits
+├── CHANGELOG.md                    # Genere par semantic-release (cree a la premiere release)
 └── CORRECTIONS.md                  # Journal des corrections appliquees
 ```
 
@@ -150,6 +155,42 @@ docker run -p 80:8080 olympic-tracker
 | `runner` | `nginxinc/nginx-unprivileged:alpine3.23` | Sert `dist/` en statique sur le port 8080, en utilisateur non-root |
 
 La configuration Nginx (`nginx.conf`) gere le fallback SPA (`try_files $uri /index.html`) pour le routing cote client de React Router, ainsi que le cache long des assets statiques et la compression gzip.
+
+## Intégration continue & Releases
+
+Le workflow GitHub Actions (`.github/workflows/ci.yml`) enchaîne trois jobs sur chaque push :
+
+1. **`test`** — installe les dépendances et lance la suite Jest (`./run-tests.sh`), sur toutes les branches.
+2. **`release`** *(uniquement sur `main`)* — lance [semantic-release](https://semantic-release.gitbook.io/) pour déterminer la prochaine version à partir de l'historique des commits, générer un changelog et publier une release GitHub.
+3. **`build-and-push-image`** — build l'image Docker et la pousse sur `ghcr.io`. Si `release` a publié une nouvelle version, l'image est aussi taguée avec ce numéro de version (ex : `ghcr.io/<owner>/<repo>:1.4.0`), en plus de son tag de branche.
+
+### Conventional Commits
+
+Le versionnage repose entièrement sur le format des messages de commit, qui doivent respecter [Conventional Commits](https://www.conventionalcommits.org/) :
+
+```
+<type>[scope optionnel]: <description>
+```
+
+| Type                                                | Effet sur la version      | Exemple                                     |
+|------------------------------------------------------|----------------------------|------------------------------------------------|
+| `fix:`                                                | patch (`1.0.0` → `1.0.1`) | `fix(home): corrige l'affichage des médailles` |
+| `feat:`                                               | minor (`1.0.0` → `1.1.0`) | `feat(router): ajoute une page de détail pays`  |
+| `feat!:` ou un footer `BREAKING CHANGE:`              | major (`1.0.0` → `2.0.0`) | `feat!: renomme les props du composant Home`   |
+| `chore:`, `docs:`, `refactor:`, `test:`, `ci:`, ...    | pas de release             | `chore(ci): ajuste le workflow`                |
+
+Les messages sont contrôlés localement par un hook `commit-msg` (`commitlint` + `husky`), installé automatiquement par `npm install` (script `prepare`). Un commit qui ne respecte pas la convention est rejeté avant même d'être créé. C'est un filet de sécurité local uniquement — rien ne le vérifie en CI, donc un message passé au travers (`--no-verify`, ou un clone où les hooks n'ont jamais été installés) ne compte simplement pas pour la prochaine release ; ça ne casse pas le build.
+
+**À noter :** la toute première release n'a lieu qu'une fois qu'un commit `feat:`/`fix:` (ou breaking) arrive sur `main` — semantic-release a besoin d'au moins un commit pertinent pour publier quoi que ce soit, même le `1.0.0` initial.
+
+### Ce que produit semantic-release
+
+Configuré dans `.releaserc.json` :
+
+- un tag Git `vX.Y.Z` et une Release GitHub avec des notes générées automatiquement
+- un `CHANGELOG.md` à la racine du dépôt
+- le champ `version` de `package.json` synchronisé (pas de publication npm — configuré explicitement en `npmPublish: false`)
+- le commit de release et le changelog repoussés sur `main` sous la forme `chore(release): X.Y.Z [skip ci]`
 
 ## License
 
